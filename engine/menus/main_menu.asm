@@ -20,6 +20,7 @@ MainMenu: ; 49cdc
 	xor a
 	ld [wBuffer1], a ; cry pitch length
 	ld [wBuffer2], a ; base cry
+	ld [wBuffer3], a ; delay counter
 	ld de, .titleText
 	hlcoord 0, 0
 	call PlaceString
@@ -33,69 +34,195 @@ MainMenu: ; 49cdc
 	hlcoord 2, 6
 	call PlaceString
 .CryEditor:	
-	ld hl, .digits	
+	call DelayFrame	
 	ld a, [wBuffer2]
-	and $F0
-	sra a
-	sra a
-	sra a
-	sra a
-	ld d, 0 
-	ld e, a 
-	add hl, de 
-	ld a, [hl]
-	ld de, wStringBuffer1
-	ld [de], a	
-	ld hl, .digits	
-	ld a, [wBuffer2]
-	and $F 
-	ld d, 0 
-	ld e, a 
-	add hl, de 
-	ld a, [hl]
-	ld de, wStringBuffer1
-	inc de
-	ld [de], a	
-	ld a, "@"
-	inc de
-	ld [de], a 
-	dec de
-	dec de
 	hlcoord 10, 2
-	call PlaceString
+	call .placeDigits
+	
+	ld a, [wCryPitch+1]
+	hlcoord 10, 4
+	call .placeDigits
+	ld a, [wCryPitch]
+	hlcoord 12, 4
+	call .placeDigits
+	
+	ld a, [wCryLength+1]
+	hlcoord 10, 6
+	call .placeDigits
+	ld a, [wCryLength]
+	hlcoord 12, 6
+	call .placeDigits
+	
+	ld a, $BA
+	hlcoord 9, 2
+	ld [hl], a
+	hlcoord 9, 4
+	ld [hl], a
+	hlcoord 9, 6
+	ld [hl], a
+	
+	ld b, $ED
+	ld a, [wBuffer1]
+	cp 0
+	jr nz, .arrowNotBase
+	ld a, b 
+	hlcoord 9, 2
+	ld [hl], a
+	jr .arrowPlaced
+.arrowNotBase
+	cp 1
+	jr nz, .arrowNotPitch
+	ld a, b 
+	hlcoord 9, 4
+	ld [hl], a
+	jr .arrowPlaced
+.arrowNotPitch
+	ld a, b 
+	hlcoord 9, 6
+	ld [hl], a	
+.arrowPlaced	
 	
 	call GetJoypad
-	ld a, [hJoyPressed]
+	ld a, [hJoyDown]
+	and $FF 
+	jp z, .resetInputDelay
+	ld a, [wBuffer3]
+	inc a 
+	ld [wBuffer3], a
+	cp 1 
+	jr z, .firstPress
+	cp 10 
+	jr c, .notLEFT
+	
+.firstPress:	
+	ld a, [hJoyDown]
 	and A_BUTTON
 	jr z, .notA
 	ld a, [wBuffer2]
 	ld e, a
 	ld d, 0
 	farcall _PlayCry
-	jr .nextFrame
+	jp .nextFrame
 .notA:
-	ld a, [hJoyPressed]
+	ld a, [hJoyDown]
 	and D_RIGHT
 	jr z, .notRIGHT
+	ld a, [wBuffer1]
+	cp 0
+	jr nz, .rightNotBase
 	ld a, [wBuffer2]
 	cp $43
 	jr nc, .nextFrame
 	inc a
 	ld [wBuffer2], a
 	jr .nextFrame
+.rightNotBase	
+	cp 1
+	jr nz, .rightNotPitch
+	ld hl, wCryPitch
+	call .incrementparam
+	jr .nextFrame
+.rightNotPitch		
+	ld hl, wCryLength
+	call .incrementparam
+	jr .nextFrame
 .notRIGHT:	
-	ld a, [hJoyPressed]
+	ld a, [hJoyDown]
 	and D_LEFT
 	jr z, .notLEFT
+	ld a, [wBuffer1]
+	cp 0
+	jr nz, .leftNotBase
 	ld a, [wBuffer2]
 	cp 0
 	jr z, .nextFrame
 	dec a
 	ld [wBuffer2], a
 	jr .nextFrame
+.leftNotBase	
+	cp 1
+	jr nz, .leftNotPitch
+	ld hl, wCryPitch
+	call .decrementParam
+	jr .nextFrame
+.leftNotPitch		
+	ld hl, wCryLength
+	call .decrementParam
+	jr .nextFrame
+	
 .notLEFT	
+	ld a, [hJoyPressed]
+	and D_DOWN
+	jr z, .notDOWN
+	ld a, [wBuffer1]
+	inc a 
+	cp 3
+	jr c, .noOverflow
+	xor a
+.noOverflow	
+	ld [wBuffer1], a
+	jr .nextFrame
+.notDOWN	
+	ld a, [hJoyPressed]
+	and D_UP
+	jr z, .notUP
+	ld a, [wBuffer1]
+	dec a
+	cp $FF	
+	jr nz, .noUnderflow
+	ld a, 2
+.noUnderflow	
+	ld [wBuffer1], a
+	jr .nextFrame
+.notUP
 .nextFrame:	
-	jr .CryEditor
+	
+	jp .CryEditor
+	
+.resetInputDelay:
+	xor a
+	ld [wBuffer3], a	
+	jp .CryEditor
+	
+.incrementparam:
+	push hl
+	call GetJoypad
+	ld a, [hJoyDown]
+	and B_BUTTON
+	ld a, [hl]
+	jr nz, .incrementHigh	
+	ld b, 1
+	add b
+	ld [hl], a	
+	jr nc, .incrementparamNoOverflow
+.incrementHigh:	
+	inc hl
+	ld a, [hl]
+	inc a
+	ld [hl], a
+.incrementparamNoOverflow:
+	pop hl
+	ret	
+	
+.decrementParam:
+	push hl
+	call GetJoypad
+	ld a, [hJoyDown]
+	and B_BUTTON
+	ld a, [hl]
+	jr nz, .decrementHigh
+	ld b, 1
+	sub b
+	ld [hl], a	
+	jr nc, .decrementParamNoOverflow
+.decrementHigh:	
+	inc hl
+	ld a, [hl]
+	dec a
+	ld [hl], a
+.decrementParamNoOverflow:
+	pop hl
+	ret		
 
 .titleText:
 	db "Cry Editor v0.1@"
@@ -126,7 +253,42 @@ MainMenu: ; 49cdc
 	db "D"
 	db "E"
 	db "F"
-
+	
+.placeDigits
+	push hl
+	ld b, a
+	ld hl, .digits
+	and $F0
+	sra a
+	sra a
+	sra a
+	sra a
+	and $0F
+	ld d, 0 
+	ld e, a 
+	add hl, de 
+	ld a, [hl]
+	ld de, wStringBuffer1
+	ld [de], a	
+	ld hl, .digits	
+	ld a, b
+	and $F 
+	ld d, 0 
+	ld e, a 
+	add hl, de 
+	ld a, [hl]
+	ld de, wStringBuffer1
+	inc de
+	ld [de], a	
+	ld a, "@"
+	inc de
+	ld [de], a 
+	dec de
+	dec de
+	pop hl
+	call PlaceString	
+	ret
+	
 .quit
 	ret
 ; 49d14
