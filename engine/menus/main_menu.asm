@@ -84,8 +84,8 @@ MainMenu: ; 49cdc
 	
 	call GetJoypad
 	ld a, [hJoyDown]
-	and $FF 
-	jp z, .resetInputDelay
+	and D_LEFT | D_RIGHT
+	jr z, .resetInputDelay
 	ld a, [wBuffer3]
 	inc a 
 	ld [wBuffer3], a
@@ -93,6 +93,11 @@ MainMenu: ; 49cdc
 	jr z, .firstPress
 	cp 10 
 	jr c, .notLEFT
+	jr .firstPress
+	
+.resetInputDelay:
+	xor a
+	ld [wBuffer3], a		
 	
 .firstPress:	
 	ld a, [hJoyDown]
@@ -178,11 +183,7 @@ MainMenu: ; 49cdc
 .nextFrame:	
 	
 	jp .CryEditor
-	
-.resetInputDelay:
-	xor a
-	ld [wBuffer3], a	
-	jp .CryEditor
+
 	
 .incrementparam:
 	push hl
