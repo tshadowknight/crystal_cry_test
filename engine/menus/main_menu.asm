@@ -100,7 +100,7 @@ MainMenu: ; 49cdc
 	ld [wBuffer3], a		
 	
 .firstPress:	
-	ld a, [hJoyDown]
+	ld a, [hJoyPressed]
 	and A_BUTTON
 	jr z, .notA
 	ld a, [wBuffer2]
